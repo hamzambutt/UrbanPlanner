@@ -1,11 +1,9 @@
-package com.SemiColon.urbanplanner.Login
+package com.SemiColon.urbanplanner.Signup
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,9 +31,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun LoginScreen(
-    onNavigateToSignup: () -> Unit = {},
-    onNavigateToHome: () -> Unit = {}
+fun SignupScreen(
+    onNavigateToLogin: () -> Unit = {}
 ) {
 
     var email by remember { mutableStateOf("") }
@@ -90,11 +87,23 @@ fun LoginScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Confirm Password") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
                 Spacer(modifier = Modifier.height(24.dp)) // Increased gap before button
 
                 // --- Login Button ---
                 Button(
-                    onClick = { onNavigateToHome() },
+                    onClick = { /* Handle Login Click */ },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color.Blue,
                         contentColor = Color.White
@@ -108,11 +117,11 @@ fun LoginScreen(
 
                 // --- Forgot Password Text ---
                 Text(
-                    text = "Forgot Password?",
+                    text = "Already have an account? Login",
                     color = Color.White,
                     modifier = Modifier
                         .clickable {
-                            onNavigateToSignup()
+                            onNavigateToLogin()
                         }
                         .padding(8.dp) // Padding AFTER clickable makes the touch area bigger
                 )
@@ -123,6 +132,6 @@ fun LoginScreen(
 
 @Preview(showBackground = true)
 @Composable
-fun LoginScreenPreview() {
-    LoginScreen()
+fun SignupScreenPreview() {
+    SignupScreen()
 }
