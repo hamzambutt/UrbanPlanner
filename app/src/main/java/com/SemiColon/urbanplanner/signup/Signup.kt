@@ -1,4 +1,4 @@
-package com.SemiColon.urbanplanner.Signup
+package com.SemiColon.urbanplanner.signup
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -37,6 +37,7 @@ fun SignupScreen(
 
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
 
     Column(modifier= Modifier
         .fillMaxWidth()
@@ -86,10 +87,11 @@ fun SignupScreen(
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
+                // --- Confirm Password Field ---
 
                 OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
+                    value = confirmPassword,
+                    onValueChange = { confirmPassword = it },
                     label = { Text("Confirm Password") },
                     visualTransformation = PasswordVisualTransformation(),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -103,14 +105,14 @@ fun SignupScreen(
 
                 // --- Login Button ---
                 Button(
-                    onClick = { /* Handle Login Click */ },
+                    onClick = { onNavigateToLogin() },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color.Blue,
                         contentColor = Color.White
                     ),
                     modifier = Modifier.width(200.dp)
                 ) {
-                    Text(text = "Login")
+                    Text(text = "Signup")
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))

@@ -1,11 +1,9 @@
-package com.SemiColon.urbanplanner.Login
+package com.SemiColon.urbanplanner.login
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +20,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -40,6 +39,7 @@ fun LoginScreen(
 
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var passcount by remember { mutableIntStateOf(value = 0) } // to appear forgot pass after fail
 
     Column(modifier= Modifier
         .fillMaxWidth()
@@ -49,7 +49,7 @@ fun LoginScreen(
     ){
         Card(modifier= Modifier
             .fillMaxWidth()
-            .height(400.dp) // Increased height slightly to fit everything
+            .height(400.dp)
             .padding(16.dp),
             // elevation = CardDefaults.cardElevation(10.dp),
             colors = CardDefaults.cardColors(containerColor = Color.Red)
@@ -108,7 +108,7 @@ fun LoginScreen(
 
                 // --- Forgot Password Text ---
                 Text(
-                    text = "Forgot Password?",
+                    text = "Don't have an account? Sign Up",
                     color = Color.White,
                     modifier = Modifier
                         .clickable {
@@ -116,6 +116,7 @@ fun LoginScreen(
                         }
                         .padding(8.dp) // Padding AFTER clickable makes the touch area bigger
                 )
+
             }
         }
     }
