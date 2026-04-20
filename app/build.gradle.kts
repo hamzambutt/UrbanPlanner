@@ -2,6 +2,8 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+
+    kotlin("plugin.serialization") version "1.9.0"
 }
 
 android {
@@ -61,5 +63,18 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 
+    implementation("org.maplibre.gl:android-sdk:12.3.0")
+    implementation("androidx.compose.material:material-icons-extended:1.7.6")
 
+    // 1. Supabase & Network
+    val supabaseVersion = "2.1.3" // Check for latest, but this is stable
+    val ktorVersion = "2.3.8"
+
+    implementation("io.github.jan-tennert.supabase:gotrue-kt:$supabaseVersion") // Auth
+    implementation("io.github.jan-tennert.supabase:postgrest-kt:$supabaseVersion") // Database
+    implementation("io.ktor:ktor-client-android:$ktorVersion") // Network Engine
+    implementation("io.ktor:ktor-client-core:$ktorVersion")
+
+    // 2. Serialization (Required for Supabase)
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 }

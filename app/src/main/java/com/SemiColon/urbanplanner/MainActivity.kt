@@ -10,6 +10,8 @@ import com.SemiColon.urbanplanner.navigation.AppNavigator
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        SupabaseClient.initialize(this)
         enableEdgeToEdge()
         setContent {
             AppNavigator()
