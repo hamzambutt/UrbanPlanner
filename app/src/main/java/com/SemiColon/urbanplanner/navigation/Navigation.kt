@@ -1,13 +1,22 @@
 package com.SemiColon.urbanplanner.navigation
 
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.Place
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.SemiColon.urbanplanner.DashboardScreen
 import com.SemiColon.urbanplanner.login.LoginScreen
+import com.SemiColon.urbanplanner.map.MapsScreen
 import com.SemiColon.urbanplanner.signup.SignupScreen
-import com.SemiColon.urbanplanner.map.*
 
 object Routes {
     const val LOGIN_SCREEN = "login_screen"
@@ -18,76 +27,110 @@ object Routes {
 }
 
 @Composable
-fun AppNavigator(){
+fun AppNavigator() {
     val navController = rememberNavController()
 
-    NavHost(
-        navController = navController,
-        startDestination = Routes.SPLASH_SCREEN
-    ){
-        // --- Login Screen Route ---
-        composable(Routes.LOGIN_SCREEN) {
-            LoginScreen(
-                onNavigateToSignup = {
-                    navController.navigate(Routes.SIGNUP_SCREEN)
-                },
-                // UPDATED: Now navigates to Dashboard upon login
-                onNavigateToDashboard = {
-                    navController.navigate(Routes.DASHBOARD_SCREEN){
-                        // Clears back stack so back button doesn't return to login
-                        popUpTo(Routes.LOGIN_SCREEN) { inclusive = true }
-                    }
-                }
-            )
-        }
+    // Get current destination to highlight the correct bottom nav item
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
 
-        // --- Signup Screen Route ---
-        composable(Routes.SIGNUP_SCREEN) {
-            SignupScreen(
-                onNavigateToLogin = {
-                    navController.navigate(Routes.LOGIN_SCREEN) {
-                        popUpTo(Routes.LOGIN_SCREEN) { inclusive = true }
-                    }
-                }
-            )
-        }
+    // List of screens that should NOT show the bottom bar (e.g., Splash, Login, Signup)
+    val hideBottomBarRoutes = listOf(Routes.SPLASH_SCREEN, Routes.LOGIN_SCREEN, Routes.SIGNUP_SCREEN)
 
-        // --- Dashboard Screen Route---
-        composable(Routes.DASHBOARD_SCREEN){
-            DashboardScreen(
-                onNavigateToMap = {
-                    navController.navigate(Routes.MAP_SCREEN)
-                },
-                onNavigateToSaved = {
-                    // Create a route for this later if needed
-                    // navController.navigate("saved_screen")
-                },
-                onNavigateToSettings = {
-                    // Create a route for this later if needed
-                    // navController.navigate("settings_screen")
+    Scaffold(
+        bottomBar = {
+            // Only show the BottomBar if we are on a main app screen
+            if (currentRoute !in hideBottomBarRoutes) {
+                NavigationBar {
+                    NavigationBarItem(
+                        selected = currentRoute == Routes.DASHBOARD_SCREEN,
+                        onClick = {
+                            navController.navigate(Routes.DASHBOARD_SCREEN) {
+                                popUpTo(Routes.DASHBOARD_SCREEN) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                        label = { Text("Home") },
+                        icon = { Icon(Icons.Outlined.Home, contentDescription = "Home") }
+                    )
+                    NavigationBarItem(
+                        selected = currentRoute == Routes.MAP_SCREEN,
+                        onClick = {
+                            navController.navigate(Routes.MAP_SCREEN) {
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                        label = { Text("Map") },
+                        icon = { Icon(Icons.Outlined.LocationOn, contentDescription = "Map") }
+                    )
+                    NavigationBarItem(
+                        selected = currentRoute == "saved", // Placeholder for Saved screen
+                        onClick = { /* Implement Saved Navigation */ },
+                        label = { Text("Saved") },
+                        icon = { Icon(Icons.Outlined.Place, contentDescription = "Saved") }
+                    )
                 }
-            )
+            }
         }
+    ) { innerPadding ->
+        // The innerPadding ensures content (like the Map) isn't covered by the BottomBar
+        NavHost(
+            navController = navController,
+            startDestination = Routes.SPLASH_SCREEN,
+            modifier = Modifier.padding(innerPadding)
+        ) {
+            // --- Login Screen Route ---
+            composable(Routes.LOGIN_SCREEN) {
+                LoginScreen(
+                    onNavigateToSignup = { navController.navigate(Routes.SIGNUP_SCREEN) },
+                    onNavigateToDashboard = {
+                        navController.navigate(Routes.DASHBOARD_SCREEN) {
+                            popUpTo(Routes.LOGIN_SCREEN) { inclusive = true }
+                        }
+                    }
+                )
+            }
 
-        // --- Map Screen Route ---
-        composable(Routes.MAP_SCREEN) {
-            MapsScreen()
-        }
-        // --- Splash Screen Route ---
-        composable("splash_screen") {
-            SplashScreen(
-                onNavigateToDashboard = {
-                    // Navigate to Dashboard and clear history so "Back" doesn't return to Splash
-                    navController.navigate("dashboard_screen") {
-                        popUpTo("splash_screen") { inclusive = true }
+            // --- Signup Screen Route ---
+            composable(Routes.SIGNUP_SCREEN) {
+                SignupScreen(
+                    onNavigateToLogin = {
+                        navController.navigate(Routes.LOGIN_SCREEN) {
+                            popUpTo(Routes.LOGIN_SCREEN) { inclusive = true }
+                        }
                     }
-                },
-                onNavigateToLogin = {
-                    navController.navigate("login_screen") {
-                        popUpTo("splash_screen") { inclusive = true }
+                )
+            }
+
+            // --- Dashboard Screen Route ---
+            composable(Routes.DASHBOARD_SCREEN) {
+                DashboardScreen(
+                    onNavigateToMap = { navController.navigate(Routes.MAP_SCREEN) }
+                )
+            }
+
+            // --- Map Screen Route ---
+            composable(Routes.MAP_SCREEN) {
+                MapsScreen()
+            }
+
+            // --- Splash Screen Route ---
+            composable(Routes.SPLASH_SCREEN) {
+                SplashScreen(
+                    onNavigateToDashboard = {
+                        navController.navigate(Routes.DASHBOARD_SCREEN) {
+                            popUpTo(Routes.SPLASH_SCREEN) { inclusive = true }
+                        }
+                    },
+                    onNavigateToLogin = {
+                        navController.navigate(Routes.LOGIN_SCREEN) {
+                            popUpTo(Routes.SPLASH_SCREEN) { inclusive = true }
+                        }
                     }
-                }
-            )
+                )
+            }
         }
     }
 }

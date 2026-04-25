@@ -74,6 +74,8 @@ dependencies {
     implementation("io.github.jan-tennert.supabase:postgrest-kt:$supabaseVersion") // Database
     implementation("io.ktor:ktor-client-android:$ktorVersion") // Network Engine
     implementation("io.ktor:ktor-client-core:$ktorVersion")
+    implementation("io.ktor:ktor-client-content-negotiation:$ktorVersion")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
 
     // 2. Serialization (Required for Supabase)
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")

@@ -10,6 +10,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.isSystemInDarkTheme
+import com.SemiColon.urbanplanner.ui.theme.ThemeManager
+import com.SemiColon.urbanplanner.ui.theme.ThemeMode
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Layers
@@ -17,6 +21,12 @@ import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -78,6 +88,27 @@ fun MapsScreen() {
         onResult = { isGranted -> hasLocationPermission = isGranted }
     )
 
+    // Search State
+    var searchQuery by remember { mutableStateOf("") }
+    var searchResults by remember { mutableStateOf<List<NominatimResult>>(emptyList()) }
+    val coroutineScope = rememberCoroutineScope()
+
+    val themeManager = remember { ThemeManager.getInstance(context) }
+    val currentThemeMode by themeManager.themeMode.collectAsState()
+    val isSystemDark = isSystemInDarkTheme()
+    val isAppInDarkMode = when (currentThemeMode) {
+        ThemeMode.DARK -> true
+        ThemeMode.LIGHT -> false
+        ThemeMode.SYSTEM -> isSystemDark
+    }
+
+    LaunchedEffect(isAppInDarkMode) {
+        if (currentStyle.name == "Street" || currentStyle.name == "Dark") {
+             currentStyle = if (isAppInDarkMode) mapStyles[2] else mapStyles[0]
+             mapInstance?.setStyle(currentStyle.url)
+        }
+    }
+
     // Track Map Bearing (Rotation) to spin the compass icon
     LaunchedEffect(mapInstance) {
         // In a real app, you would add a camera listener here to update 'currentBearing'
@@ -108,16 +139,106 @@ fun MapsScreen() {
             }
         )
 
-// 2. LAYER BUTTON (Top Right - Icon Only)
+        // 4. SEARCH UI (Top Center)
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .padding(top = 16.dp, start = 16.dp, end = 16.dp) // Full width search bar
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(28.dp), // Pill shape
+                shadowElevation = 6.dp,
+                color = MaterialTheme.colorScheme.surface
+            ) {
+                TextField(
+                    value = searchQuery,
+                    onValueChange = { newValue ->
+                        searchQuery = newValue
+                        if (newValue.length > 2) {
+                            coroutineScope.launch {
+                                delay(500) // Debounce
+                                if (searchQuery == newValue) {
+                                    searchResults = GeocodingService.searchPlace(newValue)
+                                }
+                            }
+                        } else {
+                            searchResults = emptyList()
+                        }
+                    },
+                    placeholder = { Text("Search here", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.5f)) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = MaterialTheme.colorScheme.onSurface.copy(alpha=0.7f)) },
+                    modifier = Modifier.fillMaxSize(),
+                    singleLine = true,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        cursorColor = MaterialTheme.colorScheme.primary
+                    ),
+                    textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface)
+                )
+            }
+
+            if (searchResults.isNotEmpty()) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    LazyColumn(
+                        modifier = Modifier.heightIn(max = 200.dp)
+                    ) {
+                        items(searchResults) { result ->
+                            Text(
+                                text = result.display_name,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        searchQuery = ""
+                                        searchResults = emptyList()
+                                        val lat = result.lat.toDoubleOrNull() ?: 0.0
+                                        val lon = result.lon.toDoubleOrNull() ?: 0.0
+                                        if (lat != 0.0 && lon != 0.0) {
+                                            mapInstance?.animateCamera(
+                                                CameraUpdateFactory.newLatLngZoom(
+                                                    LatLng(lat, lon),
+                                                    15.0
+                                                ),
+                                                1000
+                                            )
+                                        }
+                                    }
+                                    .padding(16.dp),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.1f))
+                        }
+                    }
+                }
+            }
+        }
+
+// 2. LAYER BUTTON (Top Right - Floating nicely under search)
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
-                .padding(top = 48.dp, end = 16.dp)
+                .padding(top = 90.dp, end = 16.dp)
         ) {
-            SmallFloatingActionButton(
+            FloatingActionButton(
                 onClick = { isMenuExpanded = true },
-                containerColor = Color.White,
-                contentColor = Color.DarkGray
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.size(48.dp),
+                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
             ) {
                 Icon(Icons.Default.Layers, contentDescription = "Layers")
             }
@@ -128,7 +249,7 @@ fun MapsScreen() {
                     expanded = isMenuExpanded,
                     onDismissRequest = { isMenuExpanded = false },
                     modifier = Modifier
-                        .background(Color.White)
+                        .background(MaterialTheme.colorScheme.surface)
                         .width(64.dp) // Force it to be narrow (icon width)
                 ) {
                     mapStyles.forEach { style ->
@@ -142,7 +263,7 @@ fun MapsScreen() {
                                     Icon(
                                         imageVector = style.icon,
                                         contentDescription = style.name,
-                                        tint = if (currentStyle == style) Color.Blue else Color.Gray
+                                        tint = if (currentStyle == style) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha=0.6f)
                                     )
                                 }
                             },
@@ -167,7 +288,7 @@ fun MapsScreen() {
         ) {
 
             // -- NORTH PIN BUTTON --
-            SmallFloatingActionButton(
+            FloatingActionButton(
                 onClick = {
                     mapInstance?.animateCamera(
                         CameraUpdateFactory.newCameraPosition(
@@ -178,8 +299,11 @@ fun MapsScreen() {
                         500
                     )
                 },
-                containerColor = Color.White,
-                contentColor = Color.DarkGray
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.size(48.dp),
+                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp)
             ) {
                 // We can rotate this icon based on actual map bearing if we had the listener set up
                 Icon(
@@ -219,14 +343,22 @@ fun MapsScreen() {
                                 Toast.makeText(context, "Acquiring GPS lock...", Toast.LENGTH_SHORT).show()
                             }
                         } else {
-                            Toast.makeText(context, "Map not ready.", Toast.LENGTH_SHORT).show()
+                            val style = mapInstance?.style
+                            if (mapInstance != null && style != null) {
+                                enableLocationComponent(style, mapInstance!!, context)
+                                Toast.makeText(context, "Location enabled. Pinpointing...", Toast.LENGTH_SHORT).show()
+                            } else {
+                                Toast.makeText(context, "Map not ready.", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     } else {
                         launcher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
                     }
                 },
-                containerColor = Color.White,
-                contentColor = Color.Blue
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.primary,
+                shape = CircleShape, // Classic Google Maps GPS button is a perfect circle
+                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
             ) {
                 Icon(Icons.Default.MyLocation, contentDescription = "My Location")
             }
