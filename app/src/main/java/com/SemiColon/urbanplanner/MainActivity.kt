@@ -4,12 +4,14 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.SemiColon.urbanplanner.navigation.AppNavigator
+import androidx.navigation.compose.rememberNavController
+import com.SemiColon.urbanplanner.navigation.AppNavigation
 
 
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import com.SemiColon.urbanplanner.ui.theme.ThemeManager
+import androidx.compose.runtime.remember
+import com.SemiColon.urbanplanner.utils.PreferencesManager
 import com.SemiColon.urbanplanner.ui.theme.UrbanPlannerTheme
 
 class MainActivity : ComponentActivity() {
@@ -18,11 +20,12 @@ class MainActivity : ComponentActivity() {
         SupabaseClient.initialize(this)
         enableEdgeToEdge()
         setContent {
-            val themeManager = ThemeManager.getInstance(this)
-            val currentThemeMode by themeManager.themeMode.collectAsState()
+            val preferencesManager = remember { PreferencesManager(this) }
+            val currentTheme by preferencesManager.appTheme.collectAsState()
+            val navController = rememberNavController()
 
-            UrbanPlannerTheme(themeMode = currentThemeMode) {
-                AppNavigator()
+            UrbanPlannerTheme(appTheme = currentTheme, darkTheme = true) {
+                AppNavigation(navController = navController, preferencesManager = preferencesManager)
             }
         }
     }
