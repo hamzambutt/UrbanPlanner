@@ -2,6 +2,7 @@ package com.SemiColon.urbanplanner
 
 import android.content.Context
 import androidx.core.content.edit
+import com.SemiColon.urbanplanner.BuildConfig
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.gotrue.Auth
@@ -11,9 +12,8 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 object SupabaseClient {
-    // TODO: Paste your real URL and Key here
-    private const val SUPABASE_URL = "https://ukbdekbueimhansedfzy.supabase.co"
-    private const val SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVrYmRla2J1ZWltaGFuc2VkZnp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUwODk2NTcsImV4cCI6MjA4MDY2NTY1N30.sTz_hgTRa1C4KQHzfBijNwi8Me1mBUryJN6hWPuNLK8"
+    private val SUPABASE_URL = BuildConfig.SUPABASE_URL
+    private val SUPABASE_KEY = BuildConfig.SUPABASE_KEY
 
     lateinit var client: SupabaseClient
 

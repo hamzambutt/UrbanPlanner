@@ -28,9 +28,11 @@ fun SignupScreen(
     val context = LocalContext.current
     var confirmPassword by remember { mutableStateOf("") }
 
-    if (viewModel.errorMessage != null) {
-        Toast.makeText(context, viewModel.errorMessage, Toast.LENGTH_LONG).show()
-        viewModel.errorMessage = null
+    LaunchedEffect(viewModel.errorMessage) {
+        viewModel.errorMessage?.let { error ->
+            Toast.makeText(context, error, Toast.LENGTH_LONG).show()
+            viewModel.errorMessage = null
+        }
     }
 
     Column(

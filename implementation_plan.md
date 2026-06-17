@@ -1,78 +1,123 @@
-# Map Search via OSM API (Nominatim) Implementation Plan
+# UrbanPlanner - 6-Phase Implementation Plan
 
-Based on a review of the codebase, here is an analysis of your current mapping implementation and what you need to add to achieve a functional map search using the OpenStreetMap (OSM) API.
+This document outlines the roadmap for implementing the backend integration, AI Agent interface, and map visualization layers for UrbanPlanner.
 
-## What You Are Currently Doing Next
+## User Review Required
 
-You have set up a solid foundation for mapping using modern Android practices:
-- **Map Renderer:** You are using `MapLibre GL` (`org.maplibre.gl:android-sdk:12.3.0`) integrated gracefully into Compose using `AndroidView` and `LifecycleEventObserver`.
-- **Map Styles:** You've integrated `MapTiler` to provide beautiful vector map styles (Street, Satellite, Dark) using a secret API key.
-- **Location Capabilities:** Your `MapsScreen` successfully handles runtime location permissions (`ACCESS_FINE_LOCATION`), camera tracking, rendering the user's location via the default compass, and rotating back to North.
-- **Networking/Serialization Setup:** You've prepared the networking stack perfectly in `build.gradle.kts`. You have Ktor client core/android (`2.3.8`) and `kotlinx-serialization-json` installed, which are the exact tools needed to ping the OSM API.
-
-## What is Missing to Make Map Search Work
-
-To implement the OpenStreetMap Search (Nominatim API), you need the following key missing components:
-
-### 1. Data Models for OSM Response [NEW]
-You need Kotlin data classes to parse the JSON returned by OpenStreetMap.
-Nominatim returns an array of places, each possessing variables like `lat`, `lon`, and `display_name`.
-Since you have `kotlinx-serialization`, you can create models like:
-```kotlin
-@Serializable
-data class NominatimResult(
-    val place_id: Long,
-    val lat: String,
-    val lon: String,
-    val display_name: String
-)
-```
-
-### 2. Geocoding Service Client [NEW]
-You need a class (or a suspend function) built around `Ktor` to query the Nominatim API (`https://nominatim.openstreetmap.org/search?q={query}&format=json`).
-> [!WARNING]
-> **OSM Usage Policy:** Nominatim requires you to set a valid `User-Agent` HTTP header identifying your app (e.g. `User-Agent: UrbanPlannerApp/1.0`). Failure to do so may result in your requests being blocked.
-
-### 3. Search UI Overlay in `MapsScreen.kt` [MODIFY]
-You need to add a Search Bar at the top of the map.
-- A `TextField` or `SearchBar` component overlaying the map.
-- A `LazyColumn` dropdown that displays the autocomplete/search results dynamically.
-- State variables handling the search text `var searchQuery by remember { mutableStateOf("") }` and search results.
-
-### 4. Search Selection & Map Camera Update [MODIFY]
-When the user taps on a search result from the list:
-- Convert the string `lat` and `lon` to Doubles.
-- Clear/collapse the search results.
-- Execute `mapInstance?.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(lat, lon), 14.0), 1000)` to fly the user to the searched location.
-- Optionally add a pin/marker to that specific location on the map.
-
-## Proposed Changes
-
-### App/API Layer
-#### [NEW] `NominatimResult.kt`
-- Define the serializable data structure for the coordinates and display name.
-#### [NEW] `GeocodingService.kt`
-- Initialize a Ktor `HttpClient` with a content-negotiation plugin for JSON.
-- Expose a `suspend fun searchPlace(query: String): List<NominatimResult>` function.
-
-### UI Layer
-#### [MODIFY] `maps.kt`
-- Add a Compose `SearchBar` component at the top center of the `Box`.
-- Implement a coroutine to debounce text inputs and fetch results from `GeocodingService` dynamically.
-- Implement the onClick handler inside the search list to pan the `MapLibre` camera.
+> [!IMPORTANT]
+> Please review this implementation plan before we proceed. The API schema definition (`api.json`) was mentioned in Phase 1 but I couldn't find it in the repository. Please provide the file or its contents so I can correctly map the JSON schemas to Kotlin data classes.
 
 ## Open Questions
 
-> [!IMPORTANT]
-> 1. **Autocomplete Behavior:** Do you want the search to autocomplete as you type (requires debouncing requests), or only search when the user presses an explicit "Search" button on the keyboard?
-> 2. **Markers:** When a user searches for a location and the map pans to it, do you want to place a visual marker (pin) at that exact coordinate? If so, we need to add a MapLibre symbol layer or annotation for the pin.
+> [!WARNING]
+> **API Schema Missing:** Where is the `api.json` file located, or could you provide the schema definitions for Auth, Agent, Analysis, Hazards, and Change Detection endpoints? I need this to accurately create the data models in Phase 1.
+
+## Proposed Changes
+
+We will tackle the implementation in 6 distinct phases.
+
+---
+
+### Phase 1: Establish the Network Layer & Data Models
+Map the JSON schemas to Kotlin data classes and configure a secure Ktor routing setup.
+
+#### [NEW] `com/SemiColon/urbanplanner/network/models/AuthModels.kt`
+- Define `LoginRequest`, `AuthResponse` and other auth-related serializable models.
+
+#### [NEW] `com/SemiColon/urbanplanner/network/models/AgentModels.kt`
+- Define `ChatRequest` and `ChatResponse` for the conversational agent.
+
+#### [NEW] `com/SemiColon/urbanplanner/network/models/AnalysisModels.kt`
+- Define `AnalysisRequest`, `SolarRequest` (with a default `system_size_kw` of 6.2), and `SolarResponse`.
+
+#### [NEW] `com/SemiColon/urbanplanner/network/TokenManager.kt`
+- Create a class to securely fetch the current access token from the Supabase client state.
+
+#### [MODIFY] `com/SemiColon/urbanplanner/network/ApiClient.kt` (or similar new setup)
+- Extend the Ktor client setup. Use Ktor's `Auth` plugin with a Bearer token provider tied to `TokenManager`, intercepting all requests except auth routes.
+
+---
+
+### Phase 2: AI Agent & Chat Integration
+Provide the conversational interface.
+
+#### [NEW] `com/SemiColon/urbanplanner/agent/AgentRepository.kt`
+- Implement `sendMessage(query: String, sessionId: String?)`.
+- Implement `clearSession(sessionId: String)`.
+
+#### [NEW] `com/SemiColon/urbanplanner/agent/AgentViewModel.kt`
+- Hold `MutableStateFlow<List<ChatMessage>>` for UI.
+- Store the active `session_id`.
+
+#### [NEW] `com/SemiColon/urbanplanner/agent/ChatScreen.kt`
+- Build a `LazyColumn` for chat history.
+- Include a sticky bottom text field for user input.
+- Parse `map_data` in responses to trigger MapLibre camera movements.
+
+---
+
+### Phase 3: Spatial Analysis (Amenities & Personas)
+Score locations based on user preferences.
+
+#### [NEW] `com/SemiColon/urbanplanner/analysis/AmenitiesRepository.kt`
+- Implement `getPersonas()` for preset lists.
+- Implement `analyzeLocation(lat, lon, preferences)` calling `/api/v1/amenities/analyze`.
+
+#### [NEW] `com/SemiColon/urbanplanner/analysis/AmenitiesViewModel.kt`
+- Manage selected persona and loading states.
+
+#### [MODIFY] `com/SemiColon/urbanplanner/map/maps.kt` (or related Map UI)
+- Implement a long-press listener on MapLibre to capture lat/lon and drop a temporary pin.
+- Add a bottom sheet showing `overall_score`.
+- Use a Compose charting library (e.g., Vico) or Canvas to render the `radar_chart_data`.
+
+---
+
+### Phase 4: Solar Potential & Windrose
+Visual and data-heavy map layers.
+
+#### [MODIFY] Network API Services
+- Add Ktor endpoints for `/api/v1/solar/analyze` and `/api/v1/windrose/analyze`.
+
+#### [MODIFY] Map Overlays
+- **Solar Heatmap:** Parse `heatmap_grid` (JSON array) into a MapLibre `GeoJsonSource` of polygons. Apply a `FillLayer` with color interpolations.
+- **Windrose:** Parse radial matrix data into a specialized Compose Canvas graphic sitting in an overlay card rather than directly on the map.
+
+---
+
+### Phase 5: Hazards & Compliance Layers
+Static and active geospatial data rendering.
+
+#### [MODIFY] Network API Services
+- Add data fetching methods for `/api/v1/hazards/active` and `/api/v1/compliance/illegal-societies`.
+
+#### [NEW] Map Filters UI
+- Build a "Map Layers" toggle menu (floating buttons on the screen).
+
+#### [MODIFY] Dynamic Map Rendering
+- **Illegal Societies:** Inject coordinate boundaries into a `LineLayer` (red borders) on the map when toggled.
+- **Active Hazards:** Place specific `SymbolLayer` icons (e.g., fire, flood) based on NASA EONET data when toggled.
+
+---
+
+### Phase 6: Temporal Change Detection
+Multipart image uploads for change detection.
+
+#### [MODIFY] Network API Services
+- Configure Ktor to handle `MultiPartFormDataContent` to upload two GeoTIFFs to `/api/v1/change-detection/detect`.
+- Setup downloading/polling mechanism for `/api/v1/change-detection/download/{job_id}`.
+
+#### [NEW] `com/SemiColon/urbanplanner/changedetection/ChangeDetectionScreen.kt`
+- Add UI using Compose's `rememberLauncherForActivityResult` with `ActivityResultContracts.GetContent()` to pick GeoTIFF files.
+- Handle upload and result display (binary mask GeoTIFF).
 
 ## Verification Plan
 
+### Automated Tests
+- Validate Kotlin data classes correctly serialize/deserialize mocked JSON responses.
+- Verify Ktor client intercepts requests and attaches the Bearer token correctly.
+
 ### Manual Verification
-- Compile and run the app.
-- Go to `MapsScreen`.
-- Type "New York" in the newly added search bar.
-- Wait for the results to populate in the dropdown.
-- Select "New York, USA" from the dropdown list.
-- Ensure the map camera cleanly animates directly to New York.
+- Test MapLibre interactions: Camera bounds movement for chat `map_data`, and long-press pin dropping.
+- Ensure Heatmaps and LineLayers toggle properly and render in correct coordinates.
+- Test multipart form uploads with sample images.

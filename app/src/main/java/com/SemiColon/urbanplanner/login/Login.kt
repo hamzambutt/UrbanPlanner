@@ -28,14 +28,18 @@ fun LoginScreen(
 ) {
     val context = LocalContext.current
 
-    if (viewModel.errorMessage != null) {
-        Toast.makeText(context, viewModel.errorMessage, Toast.LENGTH_LONG).show()
-        viewModel.errorMessage = null
+    LaunchedEffect(viewModel.errorMessage) {
+        viewModel.errorMessage?.let { error ->
+            Toast.makeText(context, error, Toast.LENGTH_LONG).show()
+            viewModel.errorMessage = null
+        }
     }
 
-    if (viewModel.loginSuccess) {
-        viewModel.loginSuccess = false
-        onNavigateToDashboard()
+    LaunchedEffect(viewModel.loginSuccess) {
+        if (viewModel.loginSuccess) {
+            viewModel.loginSuccess = false
+            onNavigateToDashboard()
+        }
     }
 
     Column(

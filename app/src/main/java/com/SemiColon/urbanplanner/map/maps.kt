@@ -22,9 +22,27 @@ import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.WbSunny
+import androidx.compose.material.icons.filled.HomeWork
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.LocalHospital
+import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.Park
+import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.SemiColon.urbanplanner.analysis.AmenitiesViewModel
+import com.SemiColon.urbanplanner.analysis.HazardsViewModel
+import com.SemiColon.urbanplanner.analysis.RadarChart
+import com.SemiColon.urbanplanner.analysis.SolarViewModel
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.material3.*
@@ -52,6 +70,11 @@ import org.maplibre.android.location.modes.RenderMode
 import org.maplibre.android.maps.MapLibreMap
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
+import org.maplibre.android.annotations.MarkerOptions
+import org.maplibre.android.annotations.PolygonOptions
+import org.maplibre.android.geometry.LatLng as MapLibreLatLng
+
+enum class AnalysisMode { AMENITIES, SOLAR, HAZARDS }
 
 // Updated Data Class to include Icons
 data class MapStyle(
@@ -60,10 +83,14 @@ data class MapStyle(
     val icon: ImageVector
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MapsScreen() {
+fun MapsScreen(
+    amenitiesViewModel: AmenitiesViewModel = viewModel(),
+    solarViewModel: SolarViewModel = viewModel(),
+    hazardsViewModel: HazardsViewModel = viewModel()
+) {
     val context = LocalContext.current
-    MapLibre.getInstance(context)
 
     val myApiKey = "u3q70g01iGsukPfVW10m" // Keep secret!
 
@@ -78,6 +105,15 @@ fun MapsScreen() {
     var isMenuExpanded by remember { mutableStateOf(false) }
     var mapInstance by remember { mutableStateOf<MapLibreMap?>(null) }
     var currentBearing by remember { mutableFloatStateOf(0f) } // Track rotation for compass icon
+    
+    var analysisMode by remember { mutableStateOf(AnalysisMode.AMENITIES) }
+
+    // Track what the user wants to do
+    var selectedLocation by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    var showConfigSheet by remember { mutableStateOf(false) }
+    
+    val personas by amenitiesViewModel.personas.collectAsState()
+    val selectedPersona by amenitiesViewModel.selectedPersona.collectAsState()
 
     // Permissions
     var hasLocationPermission by remember {
@@ -91,7 +127,19 @@ fun MapsScreen() {
     // Search State
     var searchQuery by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf<List<NominatimResult>>(emptyList()) }
-    val coroutineScope = rememberCoroutineScope()
+
+    // Debounced search via LaunchedEffect
+    LaunchedEffect(searchQuery) {
+        if (searchQuery.length > 2) {
+            delay(500)
+            // Push the network call to the background IO thread!
+            searchResults = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                GeocodingService.searchPlace(searchQuery)
+            }
+        } else {
+            searchResults = emptyList()
+        }
+    }
 
     val themeManager = remember { ThemeManager.getInstance(context) }
     val currentThemeMode by themeManager.themeMode.collectAsState()
@@ -111,8 +159,92 @@ fun MapsScreen() {
 
     // Track Map Bearing (Rotation) to spin the compass icon
     LaunchedEffect(mapInstance) {
-        // In a real app, you would add a camera listener here to update 'currentBearing'
-        // For now, we will just reset it on click
+        // Map is ready, setup long click
+        mapInstance?.addOnMapLongClickListener { point ->
+            // Drop a pin
+            mapInstance?.clear() // Clear old markers
+            mapInstance?.addMarker(MarkerOptions().position(point).title("Selected Location"))
+            
+            android.util.Log.d("URBAN_DEBUG", "Pin dropped! Opening configuration sheet...")
+            
+            selectedLocation = Pair(point.latitude, point.longitude)
+            showConfigSheet = true
+            true
+        }
+    }
+
+    val analysisResult by amenitiesViewModel.analysisResult.collectAsState()
+    val isAnalyzingAmenities by amenitiesViewModel.isLoading.collectAsState()
+    
+    val solarResult by solarViewModel.solarResult.collectAsState()
+    val isAnalyzingSolar by solarViewModel.isLoading.collectAsState()
+    
+    val hazardsData by hazardsViewModel.hazardsData.collectAsState()
+    val isAnalyzingHazards by hazardsViewModel.isLoading.collectAsState()
+    
+    var showBottomSheet by remember { mutableStateOf(false) }
+
+    LaunchedEffect(analysisMode) {
+        if (analysisMode == AnalysisMode.HAZARDS) {
+            hazardsViewModel.fetchData()
+        }
+    }
+
+    val errorMessage by amenitiesViewModel.errorMessage.collectAsState()
+
+    LaunchedEffect(analysisResult, errorMessage, isAnalyzingAmenities, solarResult, isAnalyzingSolar) {
+        if (analysisMode != AnalysisMode.HAZARDS && (isAnalyzingAmenities || analysisResult != null || errorMessage != null || isAnalyzingSolar || solarResult != null)) {
+            showBottomSheet = true
+        }
+    }
+    
+    // Watch for solarResult to draw heatmap
+    LaunchedEffect(solarResult) {
+        if (solarResult != null) {
+            val grid = solarResult!!.heatmapGrid
+            grid.forEach { cell ->
+                val cellLat = cell["latitude"]?.jsonPrimitive?.doubleOrNull ?: 0.0
+                val cellLon = cell["longitude"]?.jsonPrimitive?.doubleOrNull ?: 0.0
+                val score = cell["solar_score"]?.jsonPrimitive?.doubleOrNull ?: 0.0
+                if (cellLat != 0.0 && cellLon != 0.0) {
+                    val halfSize = 0.0005 // roughly 50m
+                    val polygon = PolygonOptions()
+                        .add(MapLibreLatLng(cellLat - halfSize, cellLon - halfSize))
+                        .add(MapLibreLatLng(cellLat - halfSize, cellLon + halfSize))
+                        .add(MapLibreLatLng(cellLat + halfSize, cellLon + halfSize))
+                        .add(MapLibreLatLng(cellLat + halfSize, cellLon - halfSize))
+                        .add(MapLibreLatLng(cellLat - halfSize, cellLon - halfSize))
+                        .fillColor(if (score > 80) android.graphics.Color.parseColor("#88FFCC00") else android.graphics.Color.parseColor("#88FF6600"))
+                    
+                    mapInstance?.addPolygon(polygon)
+                }
+            }
+        }
+    }
+    
+    // Watch for hazardsData to draw markers
+    LaunchedEffect(hazardsData) {
+        if (analysisMode == AnalysisMode.HAZARDS && hazardsData != null) {
+            val events = hazardsData!!["events"]?.jsonArray
+            events?.forEach { event ->
+                val title = event.jsonObject["title"]?.jsonPrimitive?.content ?: "Hazard"
+                val geometries = event.jsonObject["geometries"]?.jsonArray
+                geometries?.forEach { geo ->
+                    val coords = geo.jsonObject["coordinates"]?.jsonArray
+                    if (coords != null && coords.size >= 2) {
+                        val lon = coords[0].jsonPrimitive.doubleOrNull ?: 0.0
+                        val lat = coords[1].jsonPrimitive.doubleOrNull ?: 0.0
+                        if (lat != 0.0 && lon != 0.0) {
+                            mapInstance?.addMarker(
+                                MarkerOptions()
+                                    .position(MapLibreLatLng(lat, lon))
+                                    .title("Hazard: $title")
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 
     val mapView = rememberMapViewWithLifecycle()
@@ -126,6 +258,13 @@ fun MapsScreen() {
             update = { updatedMapView ->
                 updatedMapView.getMapAsync { map ->
                     mapInstance = map
+                    
+                    // Set default zoomed-in view instantly
+                    map.cameraPosition = CameraPosition.Builder()
+                        .target(LatLng(33.573, 73.039)) 
+                        .zoom(15.0)
+                        .build()
+                        
                     map.uiSettings.isLogoEnabled = false
                     map.uiSettings.isAttributionEnabled = false
                     map.uiSettings.isCompassEnabled = false // Hiding default compass to use custom one
@@ -154,19 +293,7 @@ fun MapsScreen() {
             ) {
                 TextField(
                     value = searchQuery,
-                    onValueChange = { newValue ->
-                        searchQuery = newValue
-                        if (newValue.length > 2) {
-                            coroutineScope.launch {
-                                delay(500) // Debounce
-                                if (searchQuery == newValue) {
-                                    searchResults = GeocodingService.searchPlace(newValue)
-                                }
-                            }
-                        } else {
-                            searchResults = emptyList()
-                        }
-                    },
+                    onValueChange = { searchQuery = it },
                     placeholder = { Text("Search here", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.5f)) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search", tint = MaterialTheme.colorScheme.onSurface.copy(alpha=0.7f)) },
                     modifier = Modifier.fillMaxSize(),
@@ -224,6 +351,8 @@ fun MapsScreen() {
                     }
                 }
             }
+
+            // Persona Selector moved to Bottom Sheet
         }
 
 // 2. LAYER BUTTON (Top Right - Floating nicely under search)
@@ -363,6 +492,158 @@ fun MapsScreen() {
                 Icon(Icons.Default.MyLocation, contentDescription = "My Location")
             }
         }
+        
+        // 5. BOTTOM SHEET FOR SPATIAL ANALYSIS
+        if (showBottomSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { 
+                    showBottomSheet = false 
+                    amenitiesViewModel.clearResultsOnly()
+                    solarViewModel.clearAnalysis()
+                    mapInstance?.clear()
+                },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    if (isAnalyzingAmenities || isAnalyzingSolar) {
+                        CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Analyzing area...", style = MaterialTheme.typography.bodyLarge)
+                    } else if (analysisMode == AnalysisMode.AMENITIES && analysisResult != null) {
+                        val result = analysisResult!!
+                        Text(
+                            text = "Livability Score: ${result.overallScore ?: 0}/100",
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // Radar Chart
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(250.dp)
+                                .padding(16.dp)
+                        ) {
+                            RadarChart(data = result.radarChartData ?: emptyMap())
+                        }
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Amenities Found: ${result.amenitiesFound?.size ?: 0}",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp)) {
+                            items(result.amenitiesFound ?: emptyList()) { amenity ->
+                                ListItem(
+                                    headlineContent = { Text(amenity.name?.ifBlank { "Unknown ${amenity.type?.replace("_", " ")?.capitalize()}" } ?: "Unknown") },
+                                    supportingContent = { Text("${(amenity.distance ?: 0.0).toInt()} meters away") },
+                                    leadingContent = { 
+                                        val icon = when (amenity.category) {
+                                            "healthcare" -> Icons.Default.LocalHospital
+                                            "education" -> Icons.Default.School
+                                            "park", "recreation" -> Icons.Default.Park
+                                            "food", "restaurant" -> Icons.Default.Restaurant
+                                            "commercial", "shop" -> Icons.Default.ShoppingCart
+                                            else -> Icons.Default.Place
+                                        }
+                                        Icon(icon, contentDescription = amenity.category, tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                )
+                                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.1f))
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(32.dp))
+                    } else if (analysisMode == AnalysisMode.AMENITIES && amenitiesViewModel.errorMessage.collectAsState().value != null) {
+                        Text(
+                            text = "Analysis Failed",
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = amenitiesViewModel.errorMessage.collectAsState().value ?: "Unknown Error",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Spacer(modifier = Modifier.height(32.dp))
+                    } else if (analysisMode == AnalysisMode.SOLAR && solarResult != null) {
+                        val result = solarResult!!
+                        val annualKwh = result.analysis["annual_kwh_produced"]?.jsonPrimitive?.doubleOrNull ?: 0.0
+                        val savingsUsd = result.analysis["financial_savings_usd"]?.jsonPrimitive?.doubleOrNull ?: 0.0
+                        
+                        Text(
+                            text = "Solar Potential",
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Annual Output: ${annualKwh} kWh",
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Estimated Savings: $${savingsUsd} / year",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                        Spacer(modifier = Modifier.height(32.dp))
+                    } else if (analysisMode == AnalysisMode.HAZARDS) {
+                        Text(
+                            text = "Hazards & Compliance",
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        if (isAnalyzingHazards) {
+                            CircularProgressIndicator()
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text("Fetching active hazards and societies...")
+                        } else {
+                            val activeHazardsCount = hazardsData?.get("events")?.jsonArray?.size ?: 0
+                            Text(
+                                text = "Active NASA Hazards: $activeHazardsCount",
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                            Spacer(modifier = Modifier.height(32.dp))
+                        }
+                    }
+                }
+            }
+        }
+        // 6. ANALYSIS CONFIGURATION SHEET
+        if (showConfigSheet) {
+            AnalysisConfigurationSheet(
+                personas = personas,
+                selectedMode = analysisMode,
+                onModeChange = { analysisMode = it },
+                selectedPersona = selectedPersona,
+                onPersonaChange = { amenitiesViewModel.selectPersona(it) },
+                onRunAnalysis = {
+                    showConfigSheet = false
+                    selectedLocation?.let { loc ->
+                        if (analysisMode == AnalysisMode.AMENITIES) {
+                            selectedPersona?.let { persona ->
+                                amenitiesViewModel.selectPersona(persona)
+                                amenitiesViewModel.analyzeLocation(loc.first, loc.second)
+                            }
+                        } else if (analysisMode == AnalysisMode.SOLAR) {
+                            solarViewModel.analyzeLocation(loc.first, loc.second)
+                        } else if (analysisMode == AnalysisMode.HAZARDS) {
+                            hazardsViewModel.fetchData()
+                        }
+                    }
+                },
+                onDismiss = { showConfigSheet = false }
+            )
+        }
     }
 }
 
@@ -378,6 +659,7 @@ private fun enableLocationComponent(style: Style, map: MapLibreMap, context: Con
             locationComponent.isLocationComponentEnabled = true
             locationComponent.cameraMode = CameraMode.TRACKING
             locationComponent.renderMode = RenderMode.COMPASS
+            locationComponent.zoomWhileTracking(15.0)
         } catch (e: Exception) { e.printStackTrace() }
     }
 }
@@ -411,4 +693,89 @@ fun rememberMapViewWithLifecycle(): MapView {
 @Composable
 fun MapsScreenPreview() {
     MapsScreen()
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AnalysisConfigurationSheet(
+    personas: List<com.SemiColon.urbanplanner.network.models.Persona>,
+    selectedMode: AnalysisMode,
+    onModeChange: (AnalysisMode) -> Unit,
+    selectedPersona: com.SemiColon.urbanplanner.network.models.Persona?,
+    onPersonaChange: (com.SemiColon.urbanplanner.network.models.Persona) -> Unit,
+    onRunAnalysis: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = "Configure Analysis",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 1. Select Analysis Type (Amenities, Solar, Hazards)
+            Text("Analysis Type", style = MaterialTheme.typography.labelLarge)
+            androidx.compose.foundation.lazy.LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(AnalysisMode.values()) { mode ->
+                    FilterChip(
+                        selected = selectedMode == mode,
+                        onClick = { onModeChange(mode) },
+                        label = { Text(mode.name.lowercase().replaceFirstChar { it.uppercase() }) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 2. Select Persona (Only show if Amenities is selected!)
+            if (selectedMode == AnalysisMode.AMENITIES) {
+                Text("Select Persona", style = MaterialTheme.typography.labelLarge)
+                if (personas.isEmpty()) {
+                    Text(
+                        text = "Loading personas...",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                } else {
+                    androidx.compose.foundation.lazy.LazyRow(
+                        modifier = Modifier.padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(personas) { persona ->
+                            FilterChip(
+                                selected = selectedPersona == persona,
+                                onClick = { onPersonaChange(persona) },
+                                label = { Text(persona.name) }
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            } else {
+                // Add some spacing if persona row is hidden
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            // 3. The Run Button
+            Button(
+                onClick = onRunAnalysis,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = selectedMode != AnalysisMode.AMENITIES || selectedPersona != null
+            ) {
+                Text("Run Analysis")
+            }
+            Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
 }

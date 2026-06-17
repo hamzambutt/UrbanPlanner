@@ -6,6 +6,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Chat
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -18,11 +19,12 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.NavHostController
 import com.SemiColon.urbanplanner.DashboardScreen
-import com.SemiColon.urbanplanner.Screens.Settings
+import com.SemiColon.urbanplanner.settings.SettingsScreen
 import com.SemiColon.urbanplanner.login.LoginScreen
 import com.SemiColon.urbanplanner.map.MapsScreen
 import com.SemiColon.urbanplanner.signup.SignupScreen
 import com.SemiColon.urbanplanner.utils.PreferencesManager
+import com.SemiColon.urbanplanner.agent.ChatScreen
 object Routes {
     const val LOGIN_SCREEN = "login_screen"
     const val SIGNUP_SCREEN = "signup_screen"
@@ -30,6 +32,7 @@ object Routes {
     const val MAP_SCREEN = "map_screen"
     const val SPLASH_SCREEN = "splash_screen"
     const val SETTINGS_SCREEN = "settings_screen"
+    const val CHAT_SCREEN = "chat_screen"
 }
 
 @Composable
@@ -48,9 +51,8 @@ fun AppNavigation(navController: NavHostController, preferencesManager: Preferen
                         selected = currentRoute == Routes.DASHBOARD_SCREEN,
                         onClick = {
                             navController.navigate(Routes.DASHBOARD_SCREEN) {
-                                popUpTo(Routes.DASHBOARD_SCREEN) { saveState = true }
+                                popUpTo(0)
                                 launchSingleTop = true
-                                restoreState = true
                             }
                         },
                         label = { Text("Home") },
@@ -66,6 +68,17 @@ fun AppNavigation(navController: NavHostController, preferencesManager: Preferen
                         },
                         label = { Text("Map") },
                         icon = { Icon(Icons.Outlined.LocationOn, contentDescription = "Map") }
+                    )
+                    NavigationBarItem(
+                        selected = currentRoute == Routes.CHAT_SCREEN,
+                        onClick = {
+                            navController.navigate(Routes.CHAT_SCREEN) {
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                        label = { Text("AI Chat") },
+                        icon = { Icon(Icons.Outlined.Chat, contentDescription = "AI Chat") }
                     )
                     NavigationBarItem(
                         selected = currentRoute == Routes.SETTINGS_SCREEN,
@@ -113,10 +126,10 @@ fun AppNavigation(navController: NavHostController, preferencesManager: Preferen
                     }
                 )
             }
-            // --- Dashboard Screen Route ---
             composable(Routes.DASHBOARD_SCREEN) {
                 DashboardScreen(
-                    onNavigateToMap = { navController.navigate(Routes.MAP_SCREEN) }
+                    onNavigateToMap = { navController.navigate(Routes.MAP_SCREEN) },
+                    onNavigateToChat = { navController.navigate(Routes.CHAT_SCREEN) }
                 )
             }
             // --- Map Screen Route ---
@@ -125,7 +138,7 @@ fun AppNavigation(navController: NavHostController, preferencesManager: Preferen
             }
             // --- Settings Screen Route ---
             composable(Routes.SETTINGS_SCREEN) {
-                Settings(navController = navController, preferencesManager = preferencesManager)
+                SettingsScreen(navController = navController, preferencesManager = preferencesManager)
             }
             // --- Splash Screen Route ---
             composable(Routes.SPLASH_SCREEN) {
@@ -139,6 +152,14 @@ fun AppNavigation(navController: NavHostController, preferencesManager: Preferen
                         navController.navigate(Routes.LOGIN_SCREEN) {
                             popUpTo(Routes.SPLASH_SCREEN) { inclusive = true }
                         }
+                    }
+                )
+            }
+            // --- Chat Screen Route ---
+            composable(Routes.CHAT_SCREEN) {
+                ChatScreen(
+                    onMapDataReceived = { mapData ->
+                        navController.navigate(Routes.MAP_SCREEN)
                     }
                 )
             }

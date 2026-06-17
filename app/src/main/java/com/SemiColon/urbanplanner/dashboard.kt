@@ -32,7 +32,10 @@ data class DashboardAction(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DashboardScreen(onNavigateToMap: () -> Unit) {
+fun DashboardScreen(
+    onNavigateToMap: () -> Unit,
+    onNavigateToChat: () -> Unit
+) {
     val context = LocalContext.current
     val themeManager = remember { ThemeManager.getInstance(context) }
     val currentThemeMode by themeManager.themeMode.collectAsState()
@@ -40,9 +43,9 @@ fun DashboardScreen(onNavigateToMap: () -> Unit) {
 
     val dashboardActions = listOf(
         DashboardAction("Start Mapping", Icons.Default.AddLocationAlt, onNavigateToMap),
+        DashboardAction("AI Assistant", Icons.Default.Chat, onNavigateToChat),
         DashboardAction("Project History", Icons.Default.History) { /* History */ },
-        DashboardAction("Analytics", Icons.Default.Analytics) { /* Analytics */ },
-        DashboardAction("Community", Icons.Default.Groups) { /* Community */ }
+        DashboardAction("Analytics", Icons.Default.Analytics) { /* Analytics */ }
     )
 
     Scaffold(

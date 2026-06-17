@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.navigation.compose.rememberNavController
 import com.SemiColon.urbanplanner.navigation.AppNavigation
+import org.maplibre.android.MapLibre
 
 
 import androidx.compose.runtime.collectAsState
@@ -17,6 +18,7 @@ import com.SemiColon.urbanplanner.ui.theme.UrbanPlannerTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        MapLibre.getInstance(this)
         SupabaseClient.initialize(this)
         enableEdgeToEdge()
         setContent {
