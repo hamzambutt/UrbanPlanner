@@ -20,6 +20,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.NavHostController
 import com.SemiColon.urbanplanner.DashboardScreen
 import com.SemiColon.urbanplanner.settings.SettingsScreen
+import com.SemiColon.urbanplanner.settings.ProfileScreen
 import com.SemiColon.urbanplanner.login.LoginScreen
 import com.SemiColon.urbanplanner.map.MapsScreen
 import com.SemiColon.urbanplanner.signup.SignupScreen
@@ -32,6 +33,7 @@ object Routes {
     const val MAP_SCREEN = "map_screen"
     const val SPLASH_SCREEN = "splash_screen"
     const val SETTINGS_SCREEN = "settings_screen"
+    const val PROFILE_SCREEN = "profile_screen"
     const val CHAT_SCREEN = "chat_screen"
 }
 
@@ -40,8 +42,8 @@ fun AppNavigation(navController: NavHostController, preferencesManager: Preferen
     // Get current destination to highlight the correct bottom nav item
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    // List of screens that should NOT show the bottom bar (e.g., Splash, Login, Signup)
-    val hideBottomBarRoutes = listOf(Routes.SPLASH_SCREEN, Routes.LOGIN_SCREEN, Routes.SIGNUP_SCREEN)
+    // List of screens that should NOT show the bottom bar (e.g., Splash, Login, Signup, Profile)
+    val hideBottomBarRoutes = listOf(Routes.SPLASH_SCREEN, Routes.LOGIN_SCREEN, Routes.SIGNUP_SCREEN, Routes.PROFILE_SCREEN)
     Scaffold(
         bottomBar = {
             // Only show the BottomBar if we are on a main app screen
@@ -139,6 +141,10 @@ fun AppNavigation(navController: NavHostController, preferencesManager: Preferen
             // --- Settings Screen Route ---
             composable(Routes.SETTINGS_SCREEN) {
                 SettingsScreen(navController = navController, preferencesManager = preferencesManager)
+            }
+            // --- Profile Screen Route ---
+            composable(Routes.PROFILE_SCREEN) {
+                ProfileScreen(navController = navController)
             }
             // --- Splash Screen Route ---
             composable(Routes.SPLASH_SCREEN) {

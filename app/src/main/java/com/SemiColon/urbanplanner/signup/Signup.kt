@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -71,6 +72,23 @@ fun SignupScreen(
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // Full Name Field
+                OutlinedTextField(
+                    value = viewModel.fullName,
+                    onValueChange = { viewModel.fullName = it },
+                    label = { Text("Full Name") },
+                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = "Full Name") },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 // Email Field
                 OutlinedTextField(
                     value = viewModel.email,
@@ -82,7 +100,8 @@ fun SignupScreen(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
                         unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -99,7 +118,8 @@ fun SignupScreen(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
                         unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -112,13 +132,12 @@ fun SignupScreen(
                     leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Confirm Password") },
                     visualTransformation = PasswordVisualTransformation(),
                     shape = RoundedCornerShape(12.dp),
-                    isError = viewModel.password.isNotEmpty() && confirmPassword.isNotEmpty() && viewModel.password != confirmPassword,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
-                        errorBorderColor = MaterialTheme.colorScheme.error
+                        unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
 
                 Spacer(modifier = Modifier.height(32.dp))
@@ -127,10 +146,10 @@ fun SignupScreen(
                 Button(
                     onClick = {
                         if (viewModel.password != confirmPassword) {
-                            Toast.makeText(context, "Passwords do not match", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Passwords do not match!", Toast.LENGTH_SHORT).show()
                         } else {
                             viewModel.onSignUp(onSuccess = {
-                                Toast.makeText(context, "Account Created!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Account created! Please login.", Toast.LENGTH_LONG).show()
                                 onNavigateToLogin()
                             })
                         }
@@ -151,7 +170,7 @@ fun SignupScreen(
                             modifier = Modifier.size(24.dp)
                         )
                     } else {
-                        Text(text = "Signup", style = MaterialTheme.typography.titleMedium)
+                        Text(text = "Sign Up", style = MaterialTheme.typography.titleMedium)
                     }
                 }
             }
@@ -159,9 +178,9 @@ fun SignupScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Login Link
+        // Sign In Link
         Text(
-            text = "Already have an account? Login",
+            text = "Already have an account? Sign In",
             color = MaterialTheme.colorScheme.primary,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,

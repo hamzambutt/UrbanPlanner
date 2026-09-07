@@ -1664,9 +1664,13 @@ import io.github.jan.supabase.gotrue.auth
 import io.github.jan.supabase.gotrue.providers.builtin.Email
 import kotlinx.coroutines.launch
 import android.util.Log
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 class AuthViewModel : ViewModel() {
 
+    var fullName by mutableStateOf("")
+    var organizationName by mutableStateOf("")
     var email by mutableStateOf("")
     var password by mutableStateOf("")
 
@@ -1674,50 +1678,66 @@ class AuthViewModel : ViewModel() {
     var errorMessage by mutableStateOf<String?>(null)
     var loginSuccess by mutableStateOf(false)
 
-        fun onSignUp(onSuccess: () -> Unit) {
-            // ... validation ...
-            viewModelScope.launch {
-                isLoading = true
-                errorMessage = null
-                try {
-                    Log.d("SupabaseAuth", "Attempting Signup for: $email") // <--- LOGGING
-                    SupabaseClient.client.auth.signUpWith(Email) {
-                        email = this@AuthViewModel.email
-                        password = this@AuthViewModel.password
-                    }
-                    Log.d("SupabaseAuth", "Signup Successful!") // <--- LOGGING
-                    onSuccess()
-                } catch (e: Exception) {
-                    Log.e("SupabaseAuth", "Signup Failed: ${e.message}") // <--- LOGGING ERROR
-                    errorMessage = e.message
-                } finally {
-                    isLoading = false
+    fun onSignUp(onSuccess: () -> Unit) {
+        if (email.isBlank() || password.isBlank()) {
+            errorMessage = "Please enter both email and password."
+            return
+        }
+        if (password.length < 6) {
+            errorMessage = "Password must be at least 6 characters long."
+            return
+        }
+        viewModelScope.launch {
+            isLoading = true
+            errorMessage = null
+            try {
+                Log.d("SupabaseAuth", "Attempting Signup for: $email")
+                val metadata = buildJsonObject {
+                    if (fullName.isNotBlank()) put("full_name", fullName.trim())
+                    if (organizationName.isNotBlank()) put("organization_name", organizationName.trim())
+                    put("role", "b2c")
                 }
+                SupabaseClient.client.auth.signUpWith(Email) {
+                    email = this@AuthViewModel.email.trim()
+                    password = this@AuthViewModel.password
+                    data = metadata
+                }
+                Log.d("SupabaseAuth", "Signup Successful!")
+                onSuccess()
+            } catch (e: Exception) {
+                Log.e("SupabaseAuth", "Signup Failed: ${e.message}")
+                errorMessage = e.message ?: "An unexpected error occurred during signup."
+            } finally {
+                isLoading = false
             }
         }
+    }
 
-        fun onLogin(onSuccess: () -> Unit) {
-            // ... validation ...
-            viewModelScope.launch {
-                isLoading = true
-                errorMessage = null
-                try {
-                    Log.d("SupabaseAuth", "Attempting Login for: $email") // <--- LOGGING
-                    SupabaseClient.client.auth.signInWith(Email) {
-                        email = this@AuthViewModel.email
-                        password = this@AuthViewModel.password
-                    }
-                    Log.d("SupabaseAuth", "Login Successful!") // <--- LOGGING
-                    loginSuccess = true
-                    onSuccess()
-                } catch (e: Exception) {
-                    Log.e("SupabaseAuth", "Login Failed: ${e.message}") // <--- LOGGING ERROR
-                    errorMessage = "Login failed: ${e.message}"
-                } finally {
-                    isLoading = false
+    fun onLogin(onSuccess: () -> Unit) {
+        if (email.isBlank() || password.isBlank()) {
+            errorMessage = "Please enter both email and password."
+            return
+        }
+        viewModelScope.launch {
+            isLoading = true
+            errorMessage = null
+            try {
+                Log.d("SupabaseAuth", "Attempting Login for: $email")
+                SupabaseClient.client.auth.signInWith(Email) {
+                    email = this@AuthViewModel.email.trim()
+                    password = this@AuthViewModel.password
                 }
+                Log.d("SupabaseAuth", "Login Successful!")
+                loginSuccess = true
+                onSuccess()
+            } catch (e: Exception) {
+                Log.e("SupabaseAuth", "Login Failed: ${e.message}")
+                errorMessage = "Login failed: ${e.message}"
+            } finally {
+                isLoading = false
             }
         }
+    }
 }
 ```
 
@@ -1894,6 +1914,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -1957,6 +1978,23 @@ fun SignupScreen(
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
+                // Full Name Field
+                OutlinedTextField(
+                    value = viewModel.fullName,
+                    onValueChange = { viewModel.fullName = it },
+                    label = { Text("Full Name") },
+                    leadingIcon = { Icon(Icons.Default.Person, contentDescription = "Full Name") },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 // Email Field
                 OutlinedTextField(
                     value = viewModel.email,
@@ -1968,7 +2006,8 @@ fun SignupScreen(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
                         unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -1985,7 +2024,8 @@ fun SignupScreen(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
                         unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -1998,13 +2038,12 @@ fun SignupScreen(
                     leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "Confirm Password") },
                     visualTransformation = PasswordVisualTransformation(),
                     shape = RoundedCornerShape(12.dp),
-                    isError = viewModel.password.isNotEmpty() && confirmPassword.isNotEmpty() && viewModel.password != confirmPassword,
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f),
-                        errorBorderColor = MaterialTheme.colorScheme.error
+                        unfocusedBorderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f)
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
                 )
 
                 Spacer(modifier = Modifier.height(32.dp))
@@ -2013,10 +2052,10 @@ fun SignupScreen(
                 Button(
                     onClick = {
                         if (viewModel.password != confirmPassword) {
-                            Toast.makeText(context, "Passwords do not match", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Passwords do not match!", Toast.LENGTH_SHORT).show()
                         } else {
                             viewModel.onSignUp(onSuccess = {
-                                Toast.makeText(context, "Account Created!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Account created! Please login.", Toast.LENGTH_LONG).show()
                                 onNavigateToLogin()
                             })
                         }
@@ -2037,7 +2076,7 @@ fun SignupScreen(
                             modifier = Modifier.size(24.dp)
                         )
                     } else {
-                        Text(text = "Signup", style = MaterialTheme.typography.titleMedium)
+                        Text(text = "Sign Up", style = MaterialTheme.typography.titleMedium)
                     }
                 }
             }
@@ -2045,9 +2084,9 @@ fun SignupScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Login Link
+        // Sign In Link
         Text(
-            text = "Already have an account? Login",
+            text = "Already have an account? Sign In",
             color = MaterialTheme.colorScheme.primary,
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
@@ -2935,6 +2974,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.NavHostController
 import com.SemiColon.urbanplanner.DashboardScreen
 import com.SemiColon.urbanplanner.settings.SettingsScreen
+import com.SemiColon.urbanplanner.settings.ProfileScreen
 import com.SemiColon.urbanplanner.login.LoginScreen
 import com.SemiColon.urbanplanner.map.MapsScreen
 import com.SemiColon.urbanplanner.signup.SignupScreen
@@ -2947,6 +2987,7 @@ object Routes {
     const val MAP_SCREEN = "map_screen"
     const val SPLASH_SCREEN = "splash_screen"
     const val SETTINGS_SCREEN = "settings_screen"
+    const val PROFILE_SCREEN = "profile_screen"
     const val CHAT_SCREEN = "chat_screen"
 }
 
@@ -2955,8 +2996,8 @@ fun AppNavigation(navController: NavHostController, preferencesManager: Preferen
     // Get current destination to highlight the correct bottom nav item
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
-    // List of screens that should NOT show the bottom bar (e.g., Splash, Login, Signup)
-    val hideBottomBarRoutes = listOf(Routes.SPLASH_SCREEN, Routes.LOGIN_SCREEN, Routes.SIGNUP_SCREEN)
+    // List of screens that should NOT show the bottom bar (e.g., Splash, Login, Signup, Profile)
+    val hideBottomBarRoutes = listOf(Routes.SPLASH_SCREEN, Routes.LOGIN_SCREEN, Routes.SIGNUP_SCREEN, Routes.PROFILE_SCREEN)
     Scaffold(
         bottomBar = {
             // Only show the BottomBar if we are on a main app screen
@@ -3054,6 +3095,10 @@ fun AppNavigation(navController: NavHostController, preferencesManager: Preferen
             // --- Settings Screen Route ---
             composable(Routes.SETTINGS_SCREEN) {
                 SettingsScreen(navController = navController, preferencesManager = preferencesManager)
+            }
+            // --- Profile Screen Route ---
+            composable(Routes.PROFILE_SCREEN) {
+                ProfileScreen(navController = navController)
             }
             // --- Splash Screen Route ---
             composable(Routes.SPLASH_SCREEN) {
@@ -3237,6 +3282,61 @@ object TokenManager {
 }
 ```
 
+## app\src\main\java\com\SemiColon\urbanplanner\network\ProfileRepository.kt
+`$lang
+package com.SemiColon.urbanplanner.network
+
+import android.util.Log
+import com.SemiColon.urbanplanner.SupabaseClient
+import com.SemiColon.urbanplanner.network.models.ProfileResponse
+import io.github.jan.supabase.gotrue.auth
+import io.ktor.client.call.body
+import io.ktor.client.request.get
+import kotlinx.serialization.json.jsonPrimitive
+
+class ProfileRepository {
+
+    suspend fun getMyProfile(): ProfileResponse? {
+        return try {
+            val response = ApiClient.client.get("${ApiClient.BASE_URL}/api/v1/profiles/me")
+            if (response.status.value in 200..299) {
+                response.body<ProfileResponse>()
+            } else {
+                Log.w("ProfileRepo", "Backend returned status ${response.status}, falling back to Supabase session")
+                getFallbackProfileFromSupabase()
+            }
+        } catch (e: Exception) {
+            Log.w("ProfileRepo", "Failed to reach backend /api/v1/profiles/me: ${e.message}. Using Supabase session.")
+            getFallbackProfileFromSupabase()
+        }
+    }
+
+    private fun getFallbackProfileFromSupabase(): ProfileResponse? {
+        return try {
+            val user = SupabaseClient.client.auth.currentUserOrNull() ?: return null
+            val metadata = user.userMetadata
+            val fullName = metadata?.get("full_name")?.jsonPrimitive?.content 
+                ?: metadata?.get("name")?.jsonPrimitive?.content 
+                ?: user.email?.substringBefore("@")?.replaceFirstChar { it.uppercase() }
+                ?: "Urban Planner User"
+            val orgName = metadata?.get("organization_name")?.jsonPrimitive?.content ?: "Independent"
+            val role = metadata?.get("role")?.jsonPrimitive?.content ?: "b2c"
+
+            ProfileResponse(
+                id = user.id,
+                fullName = fullName,
+                organizationName = orgName,
+                role = role,
+                status = "active"
+            )
+        } catch (e: Exception) {
+            Log.e("ProfileRepo", "Error creating fallback profile: ${e.message}")
+            null
+        }
+    }
+}
+```
+
 ## app\src\main\java\com\SemiColon\urbanplanner\network\models\AgentModels.kt
 `$lang
 package com.SemiColon.urbanplanner.network.models
@@ -3408,6 +3508,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.SemiColon.urbanplanner.SupabaseClient
 import com.SemiColon.urbanplanner.navigation.Routes
@@ -3420,16 +3521,18 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(
     navController: NavHostController,
-    preferencesManager: PreferencesManager
+    preferencesManager: PreferencesManager,
+    profileViewModel: ProfileViewModel = viewModel()
 ) {
     val currentTheme by preferencesManager.appTheme.collectAsState()
+    val profile by profileViewModel.profile.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("Settings", fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                     titleContentColor = MaterialTheme.colorScheme.onBackground
                 )
@@ -3445,11 +3548,13 @@ fun SettingsScreen(
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {
             item {
-                // Profile Header
+                // Profile Header (Clickable to open profile)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 16.dp),
+                        .clip(RoundedCornerShape(20.dp))
+                        .clickable { navController.navigate(Routes.PROFILE_SCREEN) }
+                        .padding(vertical = 12.dp, horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
@@ -3459,27 +3564,32 @@ fun SettingsScreen(
                             .background(MaterialTheme.colorScheme.primaryContainer),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = "Profile Picture",
-                            modifier = Modifier.size(40.dp),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        Text(
+                            text = (profile?.fullName?.take(1) ?: "U").uppercase(),
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
                     Spacer(modifier = Modifier.width(16.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Urban Planner User",
+                            text = profile?.fullName ?: "Urban Planner User",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "user@example.com",
+                            text = profileViewModel.userEmail,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "View Profile",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 
@@ -3488,62 +3598,84 @@ fun SettingsScreen(
                     SettingsItem(
                         icon = Icons.Default.AccountCircle,
                         title = "Profile",
-                        subtitle = "Edit your personal information",
-                        onClick = { /* Navigate to profile */ }
+                        subtitle = "View and edit your personal information",
+                        onClick = { navController.navigate(Routes.PROFILE_SCREEN) }
                     )
                     SettingsItem(
                         icon = Icons.Default.Security,
                         title = "Security",
-                        subtitle = "Password and authentication",
-                        onClick = { /* Navigate to security */ }
+                        subtitle = "Password and authentication details",
+                        onClick = { navController.navigate(Routes.PROFILE_SCREEN) }
                     )
                 }
             }
 
             item {
-                SettingsSection(title = "Preferences") {
-                    // Theme Picker embedded inside Preferences
+                SettingsSection(title = "Appearance") {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                            .padding(16.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.ColorLens,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(28.dp)
                             )
                             Spacer(modifier = Modifier.width(16.dp))
-                            Text(
-                                text = "App Theme",
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                            Column {
+                                Text(
+                                    text = "App Theme",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Choose your preferred color palette",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
 
+                        // Theme selection chips horizontally scrollable
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.padding(start = 40.dp).horizontalScroll(rememberScrollState())
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            AppTheme.entries.forEach { theme ->
+                            AppTheme.values().forEach { theme ->
                                 FilterChip(
                                     selected = currentTheme == theme,
                                     onClick = { preferencesManager.setAppTheme(theme) },
-                                    label = { Text(theme.name.replace('_', ' ')) }
+                                    label = { Text(theme.name.lowercase().replaceFirstChar { it.uppercase() }) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                                    )
                                 )
                             }
                         }
                     }
+                }
+            }
 
+            item {
+                SettingsSection(title = "Preferences") {
                     SettingsItem(
                         icon = Icons.Default.Notifications,
                         title = "Notifications",
                         subtitle = "Manage alerts and updates",
-                        onClick = { /* Toggle or navigate */ }
+                        onClick = { }
                     )
                 }
             }
@@ -3675,29 +3807,426 @@ fun SettingsItem(
         )
     }
 }
+```
 
+## app\src\main\java\com\SemiColon\urbanplanner\settings\ProfileViewModel.kt
+`$lang
+package com.SemiColon.urbanplanner.settings
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.SemiColon.urbanplanner.SupabaseClient
+import com.SemiColon.urbanplanner.network.ProfileRepository
+import com.SemiColon.urbanplanner.network.models.ProfileResponse
+import io.github.jan.supabase.gotrue.auth
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+class ProfileViewModel(
+    private val repository: ProfileRepository = ProfileRepository()
+) : ViewModel() {
+
+    private val _profile = MutableStateFlow<ProfileResponse?>(null)
+    val profile: StateFlow<ProfileResponse?> = _profile.asStateFlow()
+
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
+    val userEmail: String
+        get() = SupabaseClient.client.auth.currentUserOrNull()?.email ?: "user@example.com"
+
+    init {
+        loadProfile()
+    }
+
+    fun loadProfile() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _errorMessage.value = null
+            try {
+                val result = withContext(Dispatchers.IO) {
+                    repository.getMyProfile()
+                }
+                _profile.value = result
+            } catch (e: Exception) {
+                _errorMessage.value = e.message
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    fun signOut(onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    SupabaseClient.client.auth.signOut()
+                }
+            } catch (e: Exception) {
+                // Ignore logout exceptions
+            }
+            onSuccess()
+        }
+    }
+}
+```
+
+## app\src\main\java\com\SemiColon\urbanplanner\settings\ProfileScreen.kt
+`$lang
+package com.SemiColon.urbanplanner.settings
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
+import com.SemiColon.urbanplanner.navigation.Routes
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-@Preview
-fun SettingsItemPreview() {
-    SettingsItem(
-        icon = Icons.Default.AccountCircle,
-        title = "Profile",
-        subtitle = "Edit your personal information",
-        onClick = { /* Navigate to profile */ }
-    )
+fun ProfileScreen(
+    navController: NavHostController,
+    viewModel: ProfileViewModel = viewModel()
+) {
+    val profile by viewModel.profile.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    var showLogoutDialog by remember { mutableStateOf(false) }
+
+    Scaffold(
+        topBar = {
+            CenterAlignedTopAppBar(
+                title = { Text("My Profile", fontWeight = FontWeight.Bold) },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.loadProfile() }) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Refresh Profile"
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground
+                )
+            )
+        }
+    ) { paddingValues ->
+        if (isLoading && profile == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+                    .padding(paddingValues)
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+                contentPadding = PaddingValues(vertical = 16.dp)
+            ) {
+                // 1. Profile Hero Card
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(24.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                        ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(88.dp)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = (profile?.fullName?.take(1) ?: "U").uppercase(),
+                                    style = MaterialTheme.typography.headlineLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = profile?.fullName ?: "Urban Planner User",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = viewModel.userEmail,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                SuggestionChip(
+                                    onClick = { },
+                                    label = { 
+                                        Text(
+                                            (profile?.role ?: "b2c").uppercase(),
+                                            fontWeight = FontWeight.SemiBold
+                                        ) 
+                                    },
+                                    colors = SuggestionChipDefaults.suggestionChipColors(
+                                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
+                                    )
+                                )
+                                SuggestionChip(
+                                    onClick = { },
+                                    label = { 
+                                        Text(
+                                            (profile?.status ?: "active").replaceFirstChar { it.uppercase() },
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = Color(0xFF10B981)
+                                        ) 
+                                    },
+                                    icon = {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFF10B981))
+                                        )
+                                    },
+                                    colors = SuggestionChipDefaults.suggestionChipColors(
+                                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 2. Personal Information Section
+                item {
+                    ProfileSection(title = "Personal Information") {
+                        ProfileInfoItem(
+                            icon = Icons.Default.Person,
+                            label = "Full Name",
+                            value = profile?.fullName ?: "Not specified"
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                        )
+                        ProfileInfoItem(
+                            icon = Icons.Default.Email,
+                            label = "Email Address",
+                            value = viewModel.userEmail
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                        )
+                        ProfileInfoItem(
+                            icon = Icons.Default.Fingerprint,
+                            label = "User ID",
+                            value = profile?.id?.take(18) + "..."
+                        )
+                    }
+                }
+
+                // 3. Organization & Role Section
+                item {
+                    ProfileSection(title = "Organization & Role") {
+                        ProfileInfoItem(
+                            icon = Icons.Default.Business,
+                            label = "Organization",
+                            value = profile?.organizationName ?: "Independent"
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                        )
+                        ProfileInfoItem(
+                            icon = Icons.Default.Badge,
+                            label = "Assigned Role",
+                            value = when (profile?.role?.lowercase()) {
+                                "b2b", "urban_planner" -> "Professional Planner"
+                                "enterprise" -> "Enterprise Account"
+                                else -> "Standard User (B2C)"
+                            }
+                        )
+                    }
+                }
+
+                // 4. Logout Action Button
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { showLogoutDialog = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Logout,
+                            contentDescription = "Log Out",
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = "Log Out",
+                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (showLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            title = { Text("Log Out") },
+            text = { Text("Are you sure you want to log out of your account?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showLogoutDialog = false
+                        viewModel.signOut(onSuccess = {
+                            navController.navigate(Routes.LOGIN_SCREEN) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        })
+                    }
+                ) {
+                    Text("Log Out", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 @Composable
-@Preview(showBackground = true)
-fun SettingsScreenPreview() {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val navController = androidx.navigation.compose.rememberNavController()
-    val preferencesManager = remember { com.SemiColon.urbanplanner.utils.PreferencesManager(context) }
-    com.SemiColon.urbanplanner.ui.theme.UrbanPlannerTheme {
-        SettingsScreen(
-            navController = navController,
-            preferencesManager = preferencesManager
+fun ProfileSection(
+    title: String,
+    content: @Composable () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(bottom = 8.dp, start = 8.dp)
         )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        ) {
+            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                content()
+            }
+        }
+    }
+}
+
+@Composable
+fun ProfileInfoItem(
+    icon: ImageVector,
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
     }
 }
 ```

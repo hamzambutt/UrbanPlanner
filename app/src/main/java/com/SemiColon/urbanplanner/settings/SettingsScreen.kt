@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.SemiColon.urbanplanner.SupabaseClient
 import com.SemiColon.urbanplanner.navigation.Routes
@@ -40,16 +41,18 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(
     navController: NavHostController,
-    preferencesManager: PreferencesManager
+    preferencesManager: PreferencesManager,
+    profileViewModel: ProfileViewModel = viewModel()
 ) {
     val currentTheme by preferencesManager.appTheme.collectAsState()
+    val profile by profileViewModel.profile.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("Settings", fontWeight = FontWeight.Bold) },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
                     titleContentColor = MaterialTheme.colorScheme.onBackground
                 )
@@ -65,11 +68,13 @@ fun SettingsScreen(
             contentPadding = PaddingValues(bottom = 24.dp)
         ) {
             item {
-                // Profile Header
+                // Profile Header (Clickable to open profile)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 16.dp),
+                        .clip(RoundedCornerShape(20.dp))
+                        .clickable { navController.navigate(Routes.PROFILE_SCREEN) }
+                        .padding(vertical = 12.dp, horizontal = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
@@ -79,27 +84,32 @@ fun SettingsScreen(
                             .background(MaterialTheme.colorScheme.primaryContainer),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = "Profile Picture",
-                            modifier = Modifier.size(40.dp),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        Text(
+                            text = (profile?.fullName?.take(1) ?: "U").uppercase(),
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
                     Spacer(modifier = Modifier.width(16.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Urban Planner User",
+                            text = profile?.fullName ?: "Urban Planner User",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text = "user@example.com",
+                            text = profileViewModel.userEmail,
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "View Profile",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 
@@ -108,62 +118,84 @@ fun SettingsScreen(
                     SettingsItem(
                         icon = Icons.Default.AccountCircle,
                         title = "Profile",
-                        subtitle = "Edit your personal information",
-                        onClick = { /* Navigate to profile */ }
+                        subtitle = "View and edit your personal information",
+                        onClick = { navController.navigate(Routes.PROFILE_SCREEN) }
                     )
                     SettingsItem(
                         icon = Icons.Default.Security,
                         title = "Security",
-                        subtitle = "Password and authentication",
-                        onClick = { /* Navigate to security */ }
+                        subtitle = "Password and authentication details",
+                        onClick = { navController.navigate(Routes.PROFILE_SCREEN) }
                     )
                 }
             }
 
             item {
-                SettingsSection(title = "Preferences") {
-                    // Theme Picker embedded inside Preferences
+                SettingsSection(title = "Appearance") {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                            .padding(16.dp)
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.ColorLens,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier.size(28.dp)
                             )
                             Spacer(modifier = Modifier.width(16.dp))
-                            Text(
-                                text = "App Theme",
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
+                            Column {
+                                Text(
+                                    text = "App Theme",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Choose your preferred color palette",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
 
+                        // Theme selection chips horizontally scrollable
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.padding(start = 40.dp).horizontalScroll(rememberScrollState())
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            AppTheme.entries.forEach { theme ->
+                            AppTheme.values().forEach { theme ->
                                 FilterChip(
                                     selected = currentTheme == theme,
                                     onClick = { preferencesManager.setAppTheme(theme) },
-                                    label = { Text(theme.name.replace('_', ' ')) }
+                                    label = { Text(theme.name.lowercase().replaceFirstChar { it.uppercase() }) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                                    )
                                 )
                             }
                         }
                     }
+                }
+            }
 
+            item {
+                SettingsSection(title = "Preferences") {
                     SettingsItem(
                         icon = Icons.Default.Notifications,
                         title = "Notifications",
                         subtitle = "Manage alerts and updates",
-                        onClick = { /* Toggle or navigate */ }
+                        onClick = { }
                     )
                 }
             }
@@ -292,31 +324,6 @@ fun SettingsItem(
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(24.dp)
-        )
-    }
-}
-
-@Composable
-@Preview
-fun SettingsItemPreview() {
-    SettingsItem(
-        icon = Icons.Default.AccountCircle,
-        title = "Profile",
-        subtitle = "Edit your personal information",
-        onClick = { /* Navigate to profile */ }
-    )
-}
-
-@Composable
-@Preview(showBackground = true)
-fun SettingsScreenPreview() {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val navController = androidx.navigation.compose.rememberNavController()
-    val preferencesManager = remember { com.SemiColon.urbanplanner.utils.PreferencesManager(context) }
-    com.SemiColon.urbanplanner.ui.theme.UrbanPlannerTheme {
-        SettingsScreen(
-            navController = navController,
-            preferencesManager = preferencesManager
         )
     }
 }
